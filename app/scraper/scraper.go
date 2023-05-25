@@ -68,7 +68,18 @@ func setHeaders(r *colly.Request, pageNum, pageSize int) error {
 	r.Headers.Set(`authority`, AUTHORITY)
 	r.Headers.Set(`method`, r.Method)
 	r.Headers.Set(`path`, path.String())
-	
+	r.Headers.Set(`scheme`, `https`)
+	r.Headers.Set(`accept`, `*/*`)
+	r.Headers.Set(`accept-encoding`, `gzip, deflate, br`)
+	r.Headers.Set(`accept-language`, `en,en-US;q=0.9,zh-TW;q=0.8,zh;q=0.7`)
+	r.Headers.Set(`referer`, `https://www.otcmarkets.com/research/stock-screener`)
+	r.Headers.Set(`sec-ch-ua`, `"Google Chrome";v="113", "Chromium";v="113", "Not-A.Brand";v="24"`)
+	r.Headers.Set(`sec-ch-ua-mobile`, `?0`)
+	r.Headers.Set(`sec-ch-ua-platform`, `"Windows"`)
+	r.Headers.Set(`sec-fetch-dest`, `empty`)
+	r.Headers.Set(`sec-fetch-mode`, `cors`)
+	r.Headers.Set(`sec-fetch-site`, `same-origin`)
+	r.Headers.Set(`x-requested-with`, `XMLHttpRequest`)
 	return nil
 }
 
@@ -100,13 +111,15 @@ func getMaxPage() (int, error) {
 		return -1, err
 	}
 
+	pageNum := 0
+	pageSize := 100
 	var url strings.Builder
 	if err = urlTemp.Execute(&url, struct {
 		PageNum  int
 		PageSize int
 	}{
-		PageNum:  0,
-		PageSize: 100,
+		PageNum:  pageNum,
+		PageSize: pageSize,
 	}); err != nil {
 		return -1, err
 	}
@@ -115,6 +128,24 @@ func getMaxPage() (int, error) {
 
 	c.OnError(func(r *colly.Response, err error) {
 		fmt.Println("err: status code ->", r.StatusCode, "msg ->", err)
+	})
+
+	c.OnRequest(func(r *colly.Request) {
+		if err = setHeaders(r, pageNum, pageSize); err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println("request:", r.URL)
+	})
+
+	tmpFile, err := os.Create(`test.txt`)
+	if err != nil {
+		return -1, err
+	}
+	defer tmpFile.Close()
+
+	c.OnResponse(func(r *colly.Response) {
+		fmt.Fprintln(tmpFile, string(r.Body))
 	})
 
 	c.OnHTML(`#pagination > ul > li:nth-child(9) > a`, func(h *colly.HTMLElement) {
@@ -139,5 +170,6 @@ func Scrape() error {
 	if err != nil {
 		return err
 	}
+	fmt.Println(maxPage)
 	return nil
 }
