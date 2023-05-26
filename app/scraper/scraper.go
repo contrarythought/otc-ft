@@ -2,12 +2,11 @@ package scraper
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 	"text/template"
 	"time"
@@ -42,6 +41,20 @@ func downloadFile(path string, body []byte) error {
 	}
 
 	return nil
+}
+
+// TODO
+func jsonConverter(in string) ([]byte, error) {
+	var out strings.Builder
+	for _, c := range in {
+		if c != '\\' {
+			if _, err := out.WriteRune(c); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return []byte(out.String()[1 : len(out.String())-2]), nil
 }
 
 const (
@@ -102,17 +115,78 @@ type FilingData struct {
 	Ticker      string    `json:"ticker"`
 }
 
-func getMaxPage() (int, error) {
-	var maxPages int
-	var err error
+type PageData struct {
+	Count  int `json:"count"`
+	Pages  int `json:"pages"`
+	Stocks []struct {
+		SecurityID           int     `json:"securityId"`
+		ReportDate           string  `json:"reportDate"`
+		Symbol               string  `json:"symbol"`
+		SecurityName         string  `json:"securityName"`
+		Market               string  `json:"market"`
+		MarketID             int     `json:"marketId"`
+		SecurityType         string  `json:"securityType"`
+		Country              string  `json:"country,omitempty"`
+		State                string  `json:"state,omitempty"`
+		ForexCountry         string  `json:"forexCountry,omitempty"`
+		CaveatEmptor         bool    `json:"caveatEmptor"`
+		IndustryID           int     `json:"industryId,omitempty"`
+		Industry             string  `json:"industry,omitempty"`
+		Volume               int     `json:"volume"`
+		VolumeChange         float64 `json:"volumeChange,omitempty"`
+		DividendYield        float64 `json:"dividendYield"`
+		DividendPayer        bool    `json:"dividendPayer"`
+		Penny                bool    `json:"penny"`
+		Price                float64 `json:"price"`
+		ShortInterestRatio   float64 `json:"shortInterestRatio"`
+		IsBank               string  `json:"isBank"`
+		ShortInterest        int     `json:"shortInterest,omitempty"`
+		ShortInterestPercent float64 `json:"shortInterestPercent,omitempty"`
+		Pct1Day              float64 `json:"pct1Day,omitempty"`
+		Pct5Day              float64 `json:"pct5Day,omitempty"`
+		Pct4Weeks            float64 `json:"pct4Weeks,omitempty"`
+		Pct13Weeks           float64 `json:"pct13Weeks,omitempty"`
+		Pct52Weeks           float64 `json:"pct52Weeks,omitempty"`
+		PerfQxComp4Weeks     float64 `json:"perfQxComp4Weeks,omitempty"`
+		PerfQxComp13Weeks    float64 `json:"perfQxComp13Weeks,omitempty"`
+		PerfQxComp52Weeks    float64 `json:"perfQxComp52Weeks,omitempty"`
+		PerfQxBillion4Weeks  float64 `json:"perfQxBillion4Weeks,omitempty"`
+		PerfQxBillion13Weeks float64 `json:"perfQxBillion13Weeks,omitempty"`
+		PerfQxBillion52Weeks float64 `json:"perfQxBillion52Weeks,omitempty"`
+		PerfQxBanks4Weeks    float64 `json:"perfQxBanks4Weeks,omitempty"`
+		PerfQxBanks13Weeks   float64 `json:"perfQxBanks13Weeks,omitempty"`
+		PerfQxBanks52Weeks   float64 `json:"perfQxBanks52Weeks,omitempty"`
+		PerfQxIntl4Weeks     float64 `json:"perfQxIntl4Weeks,omitempty"`
+		PerfQxIntl13Weeks    float64 `json:"perfQxIntl13Weeks,omitempty"`
+		PerfQxIntl52Weeks    float64 `json:"perfQxIntl52Weeks,omitempty"`
+		PerfQxUs4Weeks       float64 `json:"perfQxUs4Weeks,omitempty"`
+		PerfQxUs13Weeks      float64 `json:"perfQxUs13Weeks,omitempty"`
+		PerfQxUs52Weeks      float64 `json:"perfQxUs52Weeks,omitempty"`
+		PerfQb4Weeks         float64 `json:"perfQb4Weeks,omitempty"`
+		PerfQb13Weeks        float64 `json:"perfQb13Weeks,omitempty"`
+		PerfQb52Weeks        float64 `json:"perfQb52Weeks,omitempty"`
+		PerfSp4Weeks         float64 `json:"perfSp4Weeks,omitempty"`
+		PerfSp13Weeks        float64 `json:"perfSp13Weeks,omitempty"`
+		PerfSp52Weeks        float64 `json:"perfSp52Weeks,omitempty"`
+		PerfQxDiv4Weeks      float64 `json:"perfQxDiv4Weeks,omitempty"`
+		PerfQxDiv13Weeks     float64 `json:"perfQxDiv13Weeks,omitempty"`
+		PerfQxDiv52Weeks     float64 `json:"perfQxDiv52Weeks,omitempty"`
+		PerfQxCan4Weeks      float64 `json:"perfQxCan4Weeks,omitempty"`
+		PerfQxCan13Weeks     float64 `json:"perfQxCan13Weeks,omitempty"`
+		PerfQxCan52Weeks     float64 `json:"perfQxCan52Weeks,omitempty"`
+		MorningStarRating    int     `json:"morningStarRating,omitempty"`
+	} `json:"stocks"`
+}
+
+func getPageData(pageNum, pageSize int) (*PageData, error) {
+	var pageData PageData
+	var err error = nil
 	urlTemp := template.New("urlTemp")
 	urlTemp, err = urlTemp.Parse(SCREENER_URL)
 	if err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	pageNum := 0
-	pageSize := 100
 	var url strings.Builder
 	if err = urlTemp.Execute(&url, struct {
 		PageNum  int
@@ -121,7 +195,7 @@ func getMaxPage() (int, error) {
 		PageNum:  pageNum,
 		PageSize: pageSize,
 	}); err != nil {
-		return -1, err
+		return nil, err
 	}
 
 	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
@@ -131,45 +205,46 @@ func getMaxPage() (int, error) {
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		if err = setHeaders(r, pageNum, pageSize); err != nil {
-			log.Fatal(err)
-		}
-
+		err = setHeaders(r, pageNum, pageSize)
 		fmt.Println("request:", r.URL)
 	})
 
-	tmpFile, err := os.Create(`test.txt`)
-	if err != nil {
-		return -1, err
-	}
-	defer tmpFile.Close()
-
+	var jsonData []byte
 	c.OnResponse(func(r *colly.Response) {
-		fmt.Fprintln(tmpFile, string(r.Body))
-	})
-
-	c.OnHTML(`#pagination > ul > li:nth-child(9) > a`, func(h *colly.HTMLElement) {
-		maxPages, err = strconv.Atoi(h.Text)
-		if err != nil {
-			log.Fatal(err)
-		}
+		jsonData, err = jsonConverter(string(r.Body))
+		err = json.Unmarshal(jsonData, &pageData)
 	})
 
 	if err = c.Visit(url.String()); err != nil {
-		return -1, err
+		return nil, err
 	}
 
-	return maxPages, nil
+	return &pageData, err
 }
 
-// TODO: visit each company link in the stock screener
-// download each pdf filling and store in server\filings
-// visit each press release link, download the text and store in server\press_releases
+const (
+	NUM_WORKERS = 10
+)
+
+// TODO:
+// 1. iterate through each page in the screener and grab the JSON data of the page
+// 2. iterate through each stock's details site and download pdf filing and press release info
+
 func Scrape() error {
-	maxPage, err := getMaxPage()
+	pageData, err := getPageData(0, 100)
 	if err != nil {
 		return err
 	}
-	fmt.Println(maxPage)
+
+	for i := 0; i < NUM_WORKERS; i++ {
+
+	}
+
+	for i := 0; i < pageData.Pages; i++ {
+		if (i+1)%10 == 0 {
+			time.Sleep(time.Duration(rand.Intn(4) + 3))
+		}
+	}
+
 	return nil
 }
