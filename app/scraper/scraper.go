@@ -2,12 +2,15 @@ package scraper
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 
@@ -230,21 +233,95 @@ const (
 // 1. iterate through each page in the screener and grab the JSON data of the page
 // 2. iterate through each stock's details site and download pdf filing and press release info
 
-func Scrape() error {
+func Scrape(errLog *os.File) error {
+	logger := log.New(errLog, "whenlambo", log.LstdFlags|log.Lshortfile)
+
 	pageData, err := getPageData(0, 100)
 	if err != nil {
 		return err
 	}
 
-	for i := 0; i < NUM_WORKERS; i++ {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
+	pageChan := make(chan int, 10)
+	var wg sync.WaitGroup
+
+	for i := 0; i < NUM_WORKERS; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Println(r)
+				}
+			}()
+			for {
+				select {
+				case page := <-pageChan:
+					if err := scrapePage(page); err != nil {
+						panic(err)
+					}
+				case <-ctx.Done():
+					if len(pageChan) == 0 {
+						return
+					}
+				}
+			}
+		}()
 	}
 
-	for i := 0; i < pageData.Pages; i++ {
+	for i := 1; i < pageData.Pages; i++ {
 		if (i+1)%10 == 0 {
 			time.Sleep(time.Duration(rand.Intn(4) + 3))
 		}
+
+		pageChan <- i
 	}
 
+	close(pageChan)
+	cancel()
+	wg.Wait()
+
+	return nil
+}
+
+const (
+	DETAIL_URL = `https://www.otcmarkets.com/stock/{{.Symbol}}/overview`
+)
+
+func scrapePage(page int) error {
+	pageData, err := getPageData(page, 100)
+	if err != nil {
+		return err
+	}
+
+	for _, stock := range pageData.Stocks {
+		// form url to send
+		detailUrlTmp := template.New("detailUrlTmp")
+		detailUrlTmp, err = detailUrlTmp.Parse(DETAIL_URL)
+		if err != nil {
+			return err
+		}
+		var url strings.Builder
+		if err = detailUrlTmp.Execute(&url, struct {
+			Symbol string
+		}{
+			Symbol: stock.Symbol,
+		}); err != nil {
+			return err
+		}
+
+		// scrape the stock's filings and PR
+		if err = scrapeStockInfo(url.String()); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// TODO: download pdf filings and press releases
+func scrapeStockInfo(stockDetailUrl string) error {
 	return nil
 }
