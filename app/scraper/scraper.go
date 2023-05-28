@@ -61,29 +61,14 @@ func jsonConverter(in string) ([]byte, error) {
 }
 
 const (
-	AUTHORITY = `www.otcmarkets.com`
+	BASE_AUTHORITY = `www.otcmarkets.com`
+	API_AUTHORITY  = `backend.otcmarkets.com`
 )
 
-func setHeaders(r *colly.Request, pageNum, pageSize int) error {
-	pathTemp := template.New("pathTemp")
-	pathTemp, err := pathTemp.Parse(PATH)
-	if err != nil {
-		return err
-	}
-	var path strings.Builder
-	if err = pathTemp.Execute(&path, struct {
-		PageNum  int
-		PageSize int
-	}{
-		PageNum:  pageNum,
-		PageSize: pageSize,
-	}); err != nil {
-		return err
-	}
-
-	r.Headers.Set(`authority`, AUTHORITY)
+func setHeaders(r *colly.Request, authority, path string) error {
+	r.Headers.Set(`authority`, authority)
 	r.Headers.Set(`method`, r.Method)
-	r.Headers.Set(`path`, path.String())
+	r.Headers.Set(`path`, path)
 	r.Headers.Set(`scheme`, `https`)
 	r.Headers.Set(`accept`, `*/*`)
 	r.Headers.Set(`accept-encoding`, `gzip, deflate, br`)
@@ -103,20 +88,6 @@ const (
 	SCREENER_URL = `https://www.otcmarkets.com/research/stock-screener/api?page={{.PageNum}}&pageSize={{.PageSize}}`
 	PATH         = `/research/stock-screener/api?page={{.PageNum}}&pageSize={{.PageSize}}`
 )
-
-type PressReleaseData struct {
-	Content     []string  `json:"content"`
-	Date        time.Time `json:"date"`
-	CompanyName string    `json:"companyName"`
-	Ticker      string    `json:"ticker"`
-}
-
-type FilingData struct {
-	Content     []byte    `json:"content"`
-	Date        time.Time `json:"date"`
-	CompanyName string    `json:"companyName"`
-	Ticker      string    `json:"ticker"`
-}
 
 type PageData struct {
 	Count  int `json:"count"`
@@ -208,7 +179,7 @@ func getPageData(pageNum, pageSize int) (*PageData, error) {
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		err = setHeaders(r, pageNum, pageSize)
+		err = setHeaders(r, BASE_AUTHORITY, url.String()[len(`https://www.otcmarkets.com`)-1:])
 		fmt.Println("request:", r.URL)
 	})
 
@@ -313,7 +284,7 @@ func scrapePage(page int) error {
 		}
 
 		// scrape the stock's filings and PR
-		if err = scrapeStockInfo(url.String()); err != nil {
+		if err = scrapeStockInfo(url.String(), stock.Symbol); err != nil {
 			return err
 		}
 	}
@@ -321,7 +292,73 @@ func scrapePage(page int) error {
 	return nil
 }
 
+type PressReleaseData struct {
+	Content     []string  `json:"content"`
+	Date        time.Time `json:"date"`
+	CompanyName string    `json:"companyName"`
+	Ticker      string    `json:"ticker"`
+}
+
+type FilingData struct {
+	Content     []byte    `json:"content"`
+	Date        time.Time `json:"date"`
+	CompanyName string    `json:"companyName"`
+	Ticker      string    `json:"ticker"`
+}
+
+const (
+	ALL_NEWS_URL                  = `https://www.otcmarkets.com/stock/{{.Symbol}}/news`
+	ALL_SEC_FILINGS               = `https://backend.otcmarkets.com/otcapi/company/sec-filings/AIMH?symbol=AIMH&page=1&pageSize=10`
+	EXAMPLE_SEC_FILING            = `https://www.otcmarkets.com/filing/html?id=14305340&guid=2UT-kn10eYd-B3h`
+	ALL_FINANCIAL_REPORTS_NOT_SEC = `https://backend.otcmarkets.com/otcapi/company/{{.Symbol}}/financial-report?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&statusId=A&sortOn=releaseDate&sortDir=DESC`
+	EXAMPLE_FIN_REPORT            = `https://www.otcmarkets.com/otcapi/company/financial-report/282655/content`
+)
+
 // TODO: download pdf filings and press releases
-func scrapeStockInfo(stockDetailUrl string) error {
+func scrapeStockInfo(stockOverviewUrl, symbol string) error {
+
 	return nil
+}
+
+// TODO
+func scrapeNews() error {
+	return nil
+}
+
+type TotalFinancialReports struct {
+	TotalRecords int    `json:"totalRecords"`
+	Pages        int    `json:"pages"`
+	CurrentPage  int    `json:"currentPage"`
+	PageSize     int    `json:"pageSize"`
+	SortOn       string `json:"sortOn"`
+	SortDir      string `json:"sortDir"`
+	Records      []struct {
+		ID               int    `json:"id"`
+		CompanyID        int    `json:"companyId"`
+		UserID           int    `json:"userId"`
+		Title            string `json:"title"`
+		TypeID           string `json:"typeId"`
+		StatusID         string `json:"statusId"`
+		PeriodDate       int64  `json:"periodDate"`
+		IsImmediate      bool   `json:"isImmediate"`
+		CreatedDate      int64  `json:"createdDate"`
+		LastModifiedDate int64  `json:"lastModifiedDate"`
+		ReleaseDate      int64  `json:"releaseDate"`
+		CanDistribute    bool   `json:"canDistribute"`
+		WasDistributed   bool   `json:"wasDistributed"`
+		CompanyName      string `json:"companyName"`
+		ReportType       string `json:"reportType"`
+		Name             string `json:"name"`
+		StatusDescript   string `json:"statusDescript"`
+		Symbol           string `json:"symbol"`
+		PrimarySymbol    string `json:"primarySymbol"`
+		IsCaveatEmptor   bool   `json:"isCaveatEmptor"`
+		EdgarSECFiling   bool   `json:"edgarSECFiling"`
+		TierCode         string `json:"tierCode"`
+	} `json:"records"`
+	Singular  string `json:"singular"`
+	Plural    string `json:"plural"`
+	CompanyID int    `json:"companyId"`
+	StatusID  string `json:"statusId"`
+	Empty     bool   `json:"empty"`
 }
