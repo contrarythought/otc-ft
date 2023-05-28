@@ -314,9 +314,32 @@ const (
 	EXAMPLE_FIN_REPORT            = `https://www.otcmarkets.com/otcapi/company/financial-report/282655/content`
 )
 
+func setHeadersAPI(r *colly.Request) {
+	r.Headers.Set(`authority`, API_AUTHORITY)
+	r.Headers.Set(`method`, r.Method)
+	r.Headers.Set(`path`, r.URL.String()[len(API_AUTHORITY):])
+	r.Headers.Set(`scheme`, `https`)
+	r.Headers.Set(`accept`, `application/json, text/plain, */*`)
+	r.Headers.Set(`Accept-Encoding`, `gzip, deflate, br`)
+	r.Headers.Set(`Accept-Language`, `en,en-US;q=0.9,zh-TW;q=0.8,zh;q=0.7`)
+	r.Headers.Set(`origin`, `https://www.otcmarkets.com`)
+	r.Headers.Set(`referer`, `https://www.otcmarkets.com/`)
+	r.Headers.Set(`sec-ch-ua`, `"Google Chrome";v="113", "Chromium";v="113", "Not-A.Brand";v="24"`)
+	r.Headers.Set(`Sec-Ch-Ua-Mobile`, `?0`)
+	r.Headers.Set(`Sec-Ch-Ua-Platform`, `"Windows"`)
+	r.Headers.Set(`Sec-Fetch-Dest`, `empty`)
+	r.Headers.Set(`Sec-Fetch-Mode`, `cors`)
+	r.Headers.Set(`Sec-Fetch-Site`, `same-site`)
+}
+
 // TODO: download pdf filings and press releases
 func scrapeStockInfo(stockOverviewUrl, symbol string) error {
 
+	return nil
+}
+
+// TODO: downloads reports and puts them in server directory
+func scrapeReports() error {
 	return nil
 }
 

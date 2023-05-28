@@ -76,42 +76,21 @@ func TestAimhDisclosure(t *testing.T) {
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		if err := setHeaders(r, API_AUTHORITY, url.String()[len(`https://backend.otcmarkets.com`):]); err != nil {
-			t.Error(err)
-		}
+		setHeadersAPI(r)
 		fmt.Println("request:", r.URL, "path:", r.Headers.Get("path"))
 	})
 
 	c.OnResponse(func(r *colly.Response) {
 		fmt.Println("response:", r.StatusCode)
-
-		file, err := os.Create("forbidden.html")
-		if err != nil {
-			t.Error(err)
-		}
-		defer file.Close()
-
-		htmlData, err := io.ReadAll(file)
-		if err != nil {
-			t.Error(err)
-		}
-
-		fmt.Fprintln(file, string(htmlData))
-
+		//fmt.Println(string(r.Body))
 		if err := json.Unmarshal(r.Body, &data); err != nil {
 			t.Error(err)
 		}
+
+		for _, r := range data.Records {
+			fmt.Println(r.Name, r.CreatedDate)
+		}
 	})
-
-	linkHits, err := os.Create("disclosure_links.txt")
-	if err != nil {
-		t.Error(err)
-	}
-	defer linkHits.Close()
-
-	for _, r := range data.Records {
-		fmt.Fprintln(linkHits, r)
-	}
 
 	if err := c.Visit(url.String()); err != nil {
 		t.Error(err)
