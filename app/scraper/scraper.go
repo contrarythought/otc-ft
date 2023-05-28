@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"text/template"
@@ -65,7 +66,7 @@ const (
 	API_AUTHORITY  = `backend.otcmarkets.com`
 )
 
-func setHeaders(r *colly.Request, authority, path string) error {
+func setHeaders(r *colly.Request, authority, path string) {
 	r.Headers.Set(`authority`, authority)
 	r.Headers.Set(`method`, r.Method)
 	r.Headers.Set(`path`, path)
@@ -81,7 +82,6 @@ func setHeaders(r *colly.Request, authority, path string) error {
 	r.Headers.Set(`sec-fetch-mode`, `cors`)
 	r.Headers.Set(`sec-fetch-site`, `same-origin`)
 	r.Headers.Set(`x-requested-with`, `XMLHttpRequest`)
-	return nil
 }
 
 const (
@@ -179,7 +179,7 @@ func getPageData(pageNum, pageSize int) (*PageData, error) {
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		err = setHeaders(r, BASE_AUTHORITY, url.String()[len(`https://www.otcmarkets.com`)-1:])
+		setHeaders(r, BASE_AUTHORITY, url.String()[len(`https://www.otcmarkets.com`)-1:])
 		fmt.Println("request:", r.URL)
 	})
 
@@ -311,7 +311,7 @@ const (
 	ALL_SEC_FILINGS               = `https://backend.otcmarkets.com/otcapi/company/sec-filings/AIMH?symbol=AIMH&page=1&pageSize=10`
 	EXAMPLE_SEC_FILING            = `https://www.otcmarkets.com/filing/html?id=14305340&guid=2UT-kn10eYd-B3h`
 	ALL_FINANCIAL_REPORTS_NOT_SEC = `https://backend.otcmarkets.com/otcapi/company/{{.Symbol}}/financial-report?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&statusId=A&sortOn=releaseDate&sortDir=DESC`
-	EXAMPLE_FIN_REPORT            = `https://www.otcmarkets.com/otcapi/company/financial-report/282655/content`
+	FIN_REPORT_URL                = `https://www.otcmarkets.com/otcapi/company/financial-report/{{.ID}}/content`
 )
 
 func setHeadersAPI(r *colly.Request) {
@@ -339,8 +339,151 @@ func scrapeStockInfo(stockOverviewUrl, symbol string) error {
 }
 
 // TODO: downloads reports and puts them in server directory
-func scrapeReports() error {
-	return nil
+func scrapeReports(symbol string) error {
+	// reports will be unmarshaled into data
+	var data TotalFinancialReports
+
+	// forming the url to call the API with
+	urlTemp := template.New("urlTemp")
+	urlTemp, err := urlTemp.Parse(ALL_FINANCIAL_REPORTS_NOT_SEC)
+	if err != nil {
+		return err
+	}
+	var url strings.Builder
+	if err = urlTemp.Execute(&url, struct {
+		Symbol   string
+		PageNum  string
+		PageSize string
+	}{
+		Symbol:   symbol,
+		PageNum:  "1",
+		PageSize: "10",
+	}); err != nil {
+		return err
+	}
+
+	// find out how many financial records there are
+	totalReports, err := getTotalReports(url.String())
+	if err != nil {
+		return err
+	}
+
+	time.Sleep(1 * time.Second)
+
+	// send request to API endpoint with totalRecords as PageSize
+	url.Reset()
+	if err = urlTemp.Execute(&url, struct {
+		Symbol   string
+		PageNum  string
+		PageSize string
+	}{
+		Symbol:   symbol,
+		PageNum:  "1",
+		PageSize: strconv.Itoa(totalReports),
+	}); err != nil {
+		return err
+	}
+
+	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+	c.OnRequest(func(r *colly.Request) {
+		setHeadersAPI(r)
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		err = json.Unmarshal(r.Body, &data)
+	})
+
+	if err = c.Visit(url.String()); err != nil {
+		return err
+	}
+
+	// download each report and put them in server directory
+	// TODO: determine if pdf or html before calling downloadRecord()
+	for _, r := range data.Records {
+		if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
+			return err
+		}
+		time.Sleep(1 * time.Second)
+	}
+
+	return err
+}
+
+const (
+	SERVER_PATH = `C:\Users\athor\go\otc_ft\app\server`
+)
+
+func downloadRecord(id int, symbol, typeID string) error {
+	var err error
+
+	// file to output the report into
+	outFile, err := os.Create(SERVER_PATH + symbol + strconv.Itoa(id) + typeID + ".pdf")
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	// form the url to send
+	urlTemp := template.New("urlTemp")
+	urlTemp, err = urlTemp.Parse(FIN_REPORT_URL)
+	if err != nil {
+		return err
+	}
+	var url strings.Builder
+	if err = urlTemp.Execute(&url, struct {
+		ID string
+	}{
+		ID: strconv.Itoa(id),
+	}); err != nil {
+		return err
+	}
+
+	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+	c.OnRequest(func(r *colly.Request) {
+		setHeaders(r, BASE_AUTHORITY, url.String()[len(`www.otcmarkets.com`):])
+		fmt.Println("request:", r.URL)
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		respData, err := io.ReadAll(bytes.NewReader(r.Body))
+		if err != nil {
+			// need to log this error
+			fmt.Println(err)
+		}
+		_, err = io.Copy(outFile, bytes.NewReader(respData))
+	})
+
+	if err = c.Visit(url.String()); err != nil {
+		return err
+	}
+
+	return err
+}
+
+// gets the total amount of financial records for a stock
+func getTotalReports(urlAPI string) (int, error) {
+	var data TotalFinancialReports
+	var totalRecords int
+	var err error
+
+	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+	c.OnRequest(func(r *colly.Request) {
+		setHeadersAPI(r)
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		err = json.Unmarshal(r.Body, &data)
+		totalRecords = data.TotalRecords
+	})
+
+	if err = c.Visit(urlAPI); err != nil {
+		return -1, err
+	}
+
+	return totalRecords, nil
 }
 
 // TODO

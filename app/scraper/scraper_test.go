@@ -86,13 +86,15 @@ func TestAimhDisclosure(t *testing.T) {
 		if err := json.Unmarshal(r.Body, &data); err != nil {
 			t.Error(err)
 		}
-
-		for _, r := range data.Records {
-			fmt.Println(r.Name, r.CreatedDate)
-		}
 	})
 
 	if err := c.Visit(url.String()); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestScrapeReports(t *testing.T) {
+	if err := scrapeReports("AIMH"); err != nil {
 		t.Error(err)
 	}
 }
