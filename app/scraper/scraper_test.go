@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"strings"
 	"testing"
 	"text/template"
+	"time"
 
 	"github.com/gocolly/colly/v2"
 )
@@ -96,5 +98,19 @@ func TestAimhDisclosure(t *testing.T) {
 func TestScrapeReports(t *testing.T) {
 	if err := scrapeReports("AIMH"); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestParseHTML(t *testing.T) {
+
+}
+
+func TestRand(t *testing.T) {
+	s1 := rand.NewSource(time.Now().UnixMilli())
+	t1 := rand.New(s1)
+
+	for i := 0; i < 5; i++ {
+		x := t1.Intn(3)
+		fmt.Println(x)
 	}
 }

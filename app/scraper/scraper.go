@@ -307,7 +307,8 @@ type FilingData struct {
 }
 
 const (
-	ALL_NEWS_URL                  = `https://www.otcmarkets.com/stock/{{.Symbol}}/news`
+	API_ALL_NEWS_URL              = `https://backend.otcmarkets.com/otcapi/company/AIMH/dns/news?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&sortOn=releaseDate&sortDir=DESC`
+	NEWS_URL                      = `https://www.otcmarkets.com/stock/{{.Symbol}}/news/{{.Title}}?id={{.ID}}`
 	ALL_SEC_FILINGS               = `https://backend.otcmarkets.com/otcapi/company/sec-filings/AIMH?symbol=AIMH&page=1&pageSize=10`
 	EXAMPLE_SEC_FILING            = `https://www.otcmarkets.com/filing/html?id=14305340&guid=2UT-kn10eYd-B3h`
 	ALL_FINANCIAL_REPORTS_NOT_SEC = `https://backend.otcmarkets.com/otcapi/company/{{.Symbol}}/financial-report?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&statusId=A&sortOn=releaseDate&sortDir=DESC`
@@ -338,7 +339,7 @@ func scrapeStockInfo(stockOverviewUrl, symbol string) error {
 	return nil
 }
 
-// TODO: downloads reports and puts them in server directory
+// downloads reports and puts them in server directory
 func scrapeReports(symbol string) error {
 	// reports will be unmarshaled into data
 	var data TotalFinancialReports
@@ -400,11 +401,14 @@ func scrapeReports(symbol string) error {
 
 	// download each report and put them in server directory
 	// TODO: determine if pdf or html before calling downloadRecord()
+	s1 := rand.NewSource(time.Now().UnixNano())
+	r1 := rand.New(s1)
+
 	for _, r := range data.Records {
 		if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
 			return err
 		}
-		time.Sleep(1 * time.Second)
+		time.Sleep(time.Duration(r1.Intn(6)+1) + time.Second)
 	}
 
 	return err
@@ -418,7 +422,7 @@ func downloadRecord(id int, symbol, typeID string) error {
 	var err error
 
 	// file to output the report into
-	outFile, err := os.Create(SERVER_PATH + symbol + strconv.Itoa(id) + typeID + ".pdf")
+	outFile, err := os.Create(SERVER_PATH + `\` + symbol + strconv.Itoa(id) + typeID + ".pdf")
 	if err != nil {
 		return err
 	}
@@ -487,7 +491,21 @@ func getTotalReports(urlAPI string) (int, error) {
 }
 
 // TODO
-func scrapeNews() error {
+func getTotalNews(urlAPI string) (int, error) {
+
+}
+
+// TODO
+func scrapeNews(symbol string) error {
+	// all news will be unmarshaled into data
+	var data TotalNews
+
+	// form url for initial API request to get total records
+
+	// send request to API url with totalRecords
+
+	// download all news into a txt file (scrape paragraph elements?) with the url to the pr also available
+
 	return nil
 }
 
@@ -527,4 +545,41 @@ type TotalFinancialReports struct {
 	CompanyID int    `json:"companyId"`
 	StatusID  string `json:"statusId"`
 	Empty     bool   `json:"empty"`
+}
+
+type TotalNews struct {
+	TotalRecords int    `json:"totalRecords"`
+	Pages        int    `json:"pages"`
+	CurrentPage  int    `json:"currentPage"`
+	PageSize     int    `json:"pageSize"`
+	SortOn       string `json:"sortOn"`
+	SortDir      string `json:"sortDir"`
+	Records      []struct {
+		ID                         int    `json:"id"`
+		CompanyID                  int    `json:"companyId"`
+		UserID                     int    `json:"userId"`
+		Title                      string `json:"title"`
+		TypeID                     string `json:"typeId"`
+		StatusID                   string `json:"statusId"`
+		Location                   string `json:"location"`
+		IsImmediate                bool   `json:"isImmediate"`
+		CreatedDate                int64  `json:"createdDate"`
+		LastModifiedDate           int64  `json:"lastModifiedDate"`
+		ReleaseDate                int64  `json:"releaseDate"`
+		CanDistribute              bool   `json:"canDistribute"`
+		WasDistributed             bool   `json:"wasDistributed"`
+		NewsTypeDescript           string `json:"newsTypeDescript"`
+		StatusDescript             string `json:"statusDescript"`
+		Symbol                     string `json:"symbol"`
+		IsCaveatEmptor             bool   `json:"isCaveatEmptor"`
+		SourceID                   string `json:"sourceId"`
+		DisplayDateTime            string `json:"displayDateTime"`
+		Display                    bool   `json:"display"`
+		TierCode                   string `json:"tierCode"`
+		IsItemFromExternalProvider bool   `json:"isItemFromExternalProvider"`
+		Immediate                  bool   `json:"immediate"`
+	} `json:"records"`
+	Singular string `json:"singular"`
+	Plural   string `json:"plural"`
+	Empty    bool   `json:"empty"`
 }
