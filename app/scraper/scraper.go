@@ -307,7 +307,7 @@ type FilingData struct {
 }
 
 const (
-	API_ALL_NEWS_URL              = `https://backend.otcmarkets.com/otcapi/company/AIMH/dns/news?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&sortOn=releaseDate&sortDir=DESC`
+	ALL_NEWS_URL                  = `https://backend.otcmarkets.com/otcapi/company/{{.Symbol}}/dns/news?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&sortOn=releaseDate&sortDir=DESC`
 	NEWS_URL                      = `https://www.otcmarkets.com/stock/{{.Symbol}}/news/{{.Title}}?id={{.ID}}`
 	ALL_SEC_FILINGS               = `https://backend.otcmarkets.com/otcapi/company/sec-filings/AIMH?symbol=AIMH&page=1&pageSize=10`
 	EXAMPLE_SEC_FILING            = `https://www.otcmarkets.com/filing/html?id=14305340&guid=2UT-kn10eYd-B3h`
@@ -501,8 +501,29 @@ func scrapeNews(symbol string) error {
 	var data TotalNews
 
 	// form url for initial API request to get total records
+	urlTemp := template.New("urlTemp")
+	urlTemp, err := urlTemp.Parse(ALL_NEWS_URL)
+	if err != nil {
+		return err
+	}
+	var url strings.Builder
+	if err = urlTemp.Execute(&url, struct {
+		Symbol   string
+		PageNum  string
+		PageSize string
+	}{
+		Symbol:   symbol,
+		PageNum:  "1",
+		PageSize: "10",
+	}); err != nil {
+		return err
+	}
 
 	// send request to API url with totalRecords
+	totalNews, err := getTotalNews(url.String())
+	if err != nil {
+		return err
+	}
 
 	// download all news into a txt file (scrape paragraph elements?) with the url to the pr also available
 
