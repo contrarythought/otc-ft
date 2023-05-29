@@ -487,12 +487,31 @@ func getTotalReports(urlAPI string) (int, error) {
 		return -1, err
 	}
 
-	return totalRecords, nil
+	return totalRecords, err
 }
 
-// TODO
+// TODO: test
 func getTotalNews(urlAPI string) (int, error) {
+	var data TotalNews
+	var totalNews int
+	var err error
 
+	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+	c.OnRequest(func(r *colly.Request) {
+		setHeadersAPI(r)
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		err = json.Unmarshal(r.Body, &data)
+		totalNews = data.TotalRecords
+	})
+
+	if err = c.Visit(urlAPI); err != nil {
+		return -1, err
+	}
+
+	return totalNews, err
 }
 
 // TODO
@@ -526,8 +545,36 @@ func scrapeNews(symbol string) error {
 	}
 
 	// download all news into a txt file (scrape paragraph elements?) with the url to the pr also available
+	url.Reset()
+	if err = urlTemp.Execute(&url, struct {
+		Symbol   string
+		PageNum  string
+		PageSize string
+	}{
+		Symbol:   symbol,
+		PageNum:  "1",
+		PageSize: strconv.Itoa(totalNews),
+	}); err != nil {
+		return err
+	}
 
-	return nil
+	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+	c.OnRequest(func(r *colly.Request) {
+		setHeadersAPI(r)
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		err = json.Unmarshal(r.Body, &data)
+	})
+
+	if err = c.Visit(url.String()); err != nil {
+		return err
+	}
+
+	// download news records
+
+	return err
 }
 
 type TotalFinancialReports struct {
