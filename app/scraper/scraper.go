@@ -405,6 +405,7 @@ func scrapeReports(symbol string) error {
 	r1 := rand.New(s1)
 
 	for _, r := range data.Records {
+		fmt.Println(r.ID, symbol, r.TypeID)
 		if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
 			return err
 		}
@@ -446,7 +447,7 @@ func downloadRecord(id int, symbol, typeID string) error {
 	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
 
 	c.OnRequest(func(r *colly.Request) {
-		setHeaders(r, BASE_AUTHORITY, url.String()[len(`www.otcmarkets.com`):])
+		setHeaders(r, BASE_AUTHORITY, url.String()[len(BASE_AUTHORITY):])
 		fmt.Println("request:", r.URL)
 	})
 
@@ -544,6 +545,8 @@ func scrapeNews(symbol string) error {
 		return err
 	}
 
+	time.Sleep(1 * time.Second)
+
 	// download all news into a txt file (scrape paragraph elements?) with the url to the pr also available
 	url.Reset()
 	if err = urlTemp.Execute(&url, struct {
@@ -573,6 +576,63 @@ func scrapeNews(symbol string) error {
 	}
 
 	// download news records
+	for _, r := range data.Records {
+		if err = downloadNews(symbol, r.Title, strconv.Itoa(r.ID)); err != nil {
+			return err
+		}
+	}
+
+	return err
+}
+
+// TODO
+func downloadNews(symbol, title, id string) error {
+	// create txt file to contain news article text
+	outFile, err := os.Create(SERVER_PATH + `\` + symbol + id + title + ".txt")
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
+
+	// create url to fetch the HTML of the news article
+	urlTemp := template.New("urlTemp")
+	urlTemp, err = urlTemp.Parse(NEWS_URL)
+	if err != nil {
+		return err
+	}
+	var url strings.Builder
+	if err = urlTemp.Execute(&url, struct {
+		Symbol string
+		Title  string
+		ID     string
+	}{
+		Symbol: symbol,
+		Title:  title,
+		ID:     id,
+	}); err != nil {
+		return err
+	}
+
+	// send the request to fetch article HTML
+	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+	c.OnRequest(func(r *colly.Request) {
+		setHeaders(r, BASE_AUTHORITY, url.String()[len(BASE_AUTHORITY):])
+	})
+
+	c.OnResponse(func(r *colly.Response) {
+		respData, err := io.ReadAll(bytes.NewReader(r.Body))
+		if err != nil {
+			// need to log this
+			fmt.Println(err)
+		}
+
+		
+	})
+
+	if err = c.Visit(url.String()); err != nil {
+		return err
+	}
 
 	return err
 }

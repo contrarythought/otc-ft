@@ -96,7 +96,7 @@ func TestAimhDisclosure(t *testing.T) {
 }
 
 func TestScrapeReports(t *testing.T) {
-	if err := scrapeReports("AIMH"); err != nil {
+	if err := scrapeReports("WELX"); err != nil {
 		t.Error(err)
 	}
 }
