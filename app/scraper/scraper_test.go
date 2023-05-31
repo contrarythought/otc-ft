@@ -101,8 +101,10 @@ func TestScrapeReports(t *testing.T) {
 	}
 }
 
-func TestParseHTML(t *testing.T) {
-
+func TestDownloadNews(t *testing.T) {
+	if err := downloadNews("WELX", "Winland Holdings Corporation Announces Cryptocurrency Mining Acquisition", "397694"); err != nil {
+		t.Error(err)
+	}
 }
 
 func TestRand(t *testing.T) {
