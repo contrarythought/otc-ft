@@ -576,11 +576,14 @@ func scrapeNews(symbol string) error {
 		return err
 	}
 
+	s1 := rand.NewSource(time.Now().UnixMilli())
+	r1 := rand.New(s1)
 	// download news records
 	for _, r := range data.Records {
 		if err = downloadNews(symbol, r.Title, strconv.Itoa(r.ID)); err != nil {
 			return err
 		}
+		time.Sleep(time.Duration(r1.Intn(4)+1) * time.Second)
 	}
 
 	return err
@@ -620,31 +623,6 @@ func downloadNews(symbol, title, id string) error {
 	if _, err := cmd.Output(); err != nil {
 		return err
 	}
-
-	/*
-		// send the request to fetch article HTML
-		c := colly.NewCollector(colly.UserAgent(getUserAgent()))
-
-		c.OnRequest(func(r *colly.Request) {
-			setHeaders(r, BASE_AUTHORITY, url.String()[len(BASE_AUTHORITY):])
-		})
-
-		c.OnResponse(func(r *colly.Response) {
-			respData, err := io.ReadAll(bytes.NewReader(r.Body))
-			if err != nil {
-				fmt.Println(err)
-			}
-			fmt.Fprintln(outFile, string(respData))
-		})
-
-		c.OnHTML(`div`, func(h *colly.HTMLElement) {
-			fmt.Println(h.Text)
-		})
-
-		if err = c.Visit(url.String()); err != nil {
-			return err
-		}
-	*/
 
 	return err
 }

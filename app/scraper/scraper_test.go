@@ -107,6 +107,12 @@ func TestDownloadNews(t *testing.T) {
 	}
 }
 
+func TestScrapeNews(t *testing.T) {
+	if err := scrapeNews("AIMH"); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestRand(t *testing.T) {
 	s1 := rand.NewSource(time.Now().UnixMilli())
 	t1 := rand.New(s1)

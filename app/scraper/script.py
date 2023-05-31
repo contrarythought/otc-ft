@@ -20,6 +20,7 @@ def main(url, user_agent, file_path):
 
     file = open(file_path, "w")
     file.write(html)
+    print(f"writing to {file_path}")
     file.close()
 
 if __name__ == "__main__":
