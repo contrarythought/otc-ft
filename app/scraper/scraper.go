@@ -258,34 +258,18 @@ func Scrape(errLog *os.File) error {
 	return nil
 }
 
-const (
-	DETAIL_URL = `https://www.otcmarkets.com/stock/{{.Symbol}}/overview`
-)
-
 func scrapePage(page int) error {
 	pageData, err := getPageData(page, 100)
 	if err != nil {
 		return err
 	}
 
+	// loop through each stock in the page
 	for _, stock := range pageData.Stocks {
-		// form url to send
-		detailUrlTmp := template.New("detailUrlTmp")
-		detailUrlTmp, err = detailUrlTmp.Parse(DETAIL_URL)
-		if err != nil {
+		if err = scrapeReports(stock.Symbol); err != nil {
 			return err
 		}
-		var url strings.Builder
-		if err = detailUrlTmp.Execute(&url, struct {
-			Symbol string
-		}{
-			Symbol: stock.Symbol,
-		}); err != nil {
-			return err
-		}
-
-		// scrape the stock's filings and PR
-		if err = scrapeStockInfo(url.String(), stock.Symbol); err != nil {
+		if err = scrapeNews(stock.Symbol); err != nil {
 			return err
 		}
 	}
@@ -332,12 +316,6 @@ func setHeadersAPI(r *colly.Request) {
 	r.Headers.Set(`Sec-Fetch-Dest`, `empty`)
 	r.Headers.Set(`Sec-Fetch-Mode`, `cors`)
 	r.Headers.Set(`Sec-Fetch-Site`, `same-site`)
-}
-
-// TODO: download pdf filings and press releases
-func scrapeStockInfo(stockOverviewUrl, symbol string) error {
-
-	return nil
 }
 
 // downloads reports and puts them in server directory
@@ -492,7 +470,6 @@ func getTotalReports(urlAPI string) (int, error) {
 	return totalRecords, err
 }
 
-// TODO: test
 func getTotalNews(urlAPI string) (int, error) {
 	var data TotalNews
 	var totalNews int
@@ -516,7 +493,6 @@ func getTotalNews(urlAPI string) (int, error) {
 	return totalNews, err
 }
 
-// TODO
 func scrapeNews(symbol string) error {
 	// all news will be unmarshaled into data
 	var data TotalNews
@@ -540,7 +516,7 @@ func scrapeNews(symbol string) error {
 		return err
 	}
 
-	// send request to API url with totalRecords
+	// get total amount of records to scrape
 	totalNews, err := getTotalNews(url.String())
 	if err != nil {
 		return err
@@ -548,6 +524,7 @@ func scrapeNews(symbol string) error {
 
 	time.Sleep(1 * time.Second)
 
+	// send request to API url with totalRecords
 	// download all news into a txt file (scrape paragraph elements?) with the url to the pr also available
 	url.Reset()
 	if err = urlTemp.Execute(&url, struct {
@@ -589,7 +566,6 @@ func scrapeNews(symbol string) error {
 	return err
 }
 
-// TODO: create file, execute python script to write HTML to file
 // store file name and url of article in db
 func downloadNews(symbol, title, id string) error {
 	// create txt file to contain news article text
