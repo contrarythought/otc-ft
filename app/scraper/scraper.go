@@ -231,7 +231,7 @@ func Scrape(errLog *os.File) error {
 			for {
 				select {
 				case page := <-pageChan:
-					if err := scrapePage(page); err != nil {
+					if err := scrapePage(page, logger); err != nil {
 						panic(err)
 					}
 				case <-ctx.Done():
@@ -258,7 +258,7 @@ func Scrape(errLog *os.File) error {
 	return nil
 }
 
-func scrapePage(page int) error {
+func scrapePage(page int, logger *log.Logger) error {
 	pageData, err := getPageData(page, 100)
 	if err != nil {
 		return err
@@ -266,10 +266,10 @@ func scrapePage(page int) error {
 
 	// loop through each stock in the page
 	for _, stock := range pageData.Stocks {
-		if err = scrapeReports(stock.Symbol); err != nil {
+		if err = scrapeReports(stock.Symbol, logger); err != nil {
 			return err
 		}
-		if err = scrapeNews(stock.Symbol); err != nil {
+		if err = scrapeNews(stock.Symbol, logger); err != nil {
 			return err
 		}
 	}
@@ -319,7 +319,7 @@ func setHeadersAPI(r *colly.Request) {
 }
 
 // downloads reports and puts them in server directory
-func scrapeReports(symbol string) error {
+func scrapeReports(symbol string, logger *log.Logger) error {
 	// reports will be unmarshaled into data
 	var data TotalFinancialReports
 
@@ -371,7 +371,9 @@ func scrapeReports(symbol string) error {
 	})
 
 	c.OnResponse(func(r *colly.Response) {
-		err = json.Unmarshal(r.Body, &data)
+		if err = json.Unmarshal(r.Body, &data); err != nil {
+			logger.Println(err)
+		}
 	})
 
 	if err = c.Visit(url.String()); err != nil {
@@ -470,7 +472,7 @@ func getTotalReports(urlAPI string) (int, error) {
 	return totalRecords, err
 }
 
-func getTotalNews(urlAPI string) (int, error) {
+func getTotalNews(urlAPI string, logger *log.Logger) (int, error) {
 	var data TotalNews
 	var totalNews int
 	var err error
@@ -482,7 +484,9 @@ func getTotalNews(urlAPI string) (int, error) {
 	})
 
 	c.OnResponse(func(r *colly.Response) {
-		err = json.Unmarshal(r.Body, &data)
+		if err = json.Unmarshal(r.Body, &data); err != nil {
+			logger.Println(err)
+		}
 		totalNews = data.TotalRecords
 	})
 
@@ -493,7 +497,7 @@ func getTotalNews(urlAPI string) (int, error) {
 	return totalNews, err
 }
 
-func scrapeNews(symbol string) error {
+func scrapeNews(symbol string, logger *log.Logger) error {
 	// all news will be unmarshaled into data
 	var data TotalNews
 
@@ -517,7 +521,7 @@ func scrapeNews(symbol string) error {
 	}
 
 	// get total amount of records to scrape
-	totalNews, err := getTotalNews(url.String())
+	totalNews, err := getTotalNews(url.String(), logger)
 	if err != nil {
 		return err
 	}
@@ -546,7 +550,9 @@ func scrapeNews(symbol string) error {
 	})
 
 	c.OnResponse(func(r *colly.Response) {
-		err = json.Unmarshal(r.Body, &data)
+		if err = json.Unmarshal(r.Body, &data); err != nil {
+			logger.Println(err)
+		}
 	})
 
 	if err = c.Visit(url.String()); err != nil {
