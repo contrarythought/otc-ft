@@ -267,28 +267,14 @@ func scrapePage(page int, logger *log.Logger) error {
 	// loop through each stock in the page
 	for _, stock := range pageData.Stocks {
 		if err = scrapeReports(stock.Symbol, logger); err != nil {
-			return err
+			return fmt.Errorf("error scrape report %s: %s", stock.Symbol, err)
 		}
 		if err = scrapeNews(stock.Symbol, logger); err != nil {
-			return err
+			return fmt.Errorf("error scrape news %s: %s", stock.Symbol, err)
 		}
 	}
 
 	return nil
-}
-
-type PressReleaseData struct {
-	Content     []string  `json:"content"`
-	Date        time.Time `json:"date"`
-	CompanyName string    `json:"companyName"`
-	Ticker      string    `json:"ticker"`
-}
-
-type FilingData struct {
-	Content     []byte    `json:"content"`
-	Date        time.Time `json:"date"`
-	CompanyName string    `json:"companyName"`
-	Ticker      string    `json:"ticker"`
 }
 
 const (
@@ -347,6 +333,7 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 	if err != nil {
 		return err
 	}
+	//fmt.Println("TOTAL REPORTS: ", totalReports)
 
 	time.Sleep(1 * time.Second)
 
@@ -374,6 +361,7 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 		if err = json.Unmarshal(r.Body, &data); err != nil {
 			logger.Println(err)
 		}
+		fmt.Println("ERROR: ", r.StatusCode)
 	})
 
 	if err = c.Visit(url.String()); err != nil {

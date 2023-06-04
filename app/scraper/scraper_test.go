@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/rand"
 	"os"
 	"strings"
@@ -96,7 +97,8 @@ func TestAimhDisclosure(t *testing.T) {
 }
 
 func TestScrapeReports(t *testing.T) {
-	if err := scrapeReports("WELX"); err != nil {
+	testLog := *&log.Logger{}
+	if err := scrapeReports("AAGC", &testLog); err != nil {
 		t.Error(err)
 	}
 }
@@ -108,7 +110,8 @@ func TestDownloadNews(t *testing.T) {
 }
 
 func TestScrapeNews(t *testing.T) {
-	if err := scrapeNews("AIMH"); err != nil {
+	testLog := *&log.Logger{}
+	if err := scrapeNews("AABB", &testLog); err != nil {
 		t.Error(err)
 	}
 }

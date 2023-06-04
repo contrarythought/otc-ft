@@ -1,39 +1,89 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/json"
 	"io"
 	"log"
-	"net/http"
 	"os"
-	"time"
+	"otc_ft/app/scraper"
 )
 
-func main() {
-	resource := `https://www.otcmarkets.com/otcapi/company/financial-report/206941/content`
-	file, err := os.Create(`filings/test.pdf`)
+type Creds struct {
+	User string `json:"user"`
+	Pass string `json:"pass"`
+}
+
+func getCreds() (*Creds, error) {
+	file, err := os.Open("creds.json")
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer file.Close()
 
-	req, err := http.NewRequest(http.MethodGet, resource, nil)
+	jsonData, err := io.ReadAll(file)
+	if err != nil {
+		return nil, err
+	}
+
+	var creds Creds
+	if err = json.Unmarshal(jsonData, &creds); err != nil {
+		return nil, err
+	}
+
+	return &creds, nil
+}
+
+func findErrLog() (bool, error) {
+	entries, err := os.ReadDir(`app`)
+	if err != nil {
+		return false, err
+	}
+
+	for _, entry := range entries {
+		if entry.Name() == `err_log.txt` {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func main() {
+	creds, err := getCreds()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	req.Header.Set("user-agent", getUserAgent())
-
-	client := http.Client{
-		Timeout: time.Second * 3,
-	}
-
-	resp, err := client.Do(req)
+	db, err := sql.Open("postgres", "postgres://"+creds.User+":"+creds.Pass+"@localhost/otc_fts?sslmode=disable")
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer db.Close()
+	if err = db.Ping(); err != nil {
+		log.Fatal(err)
+	}
 
-	if _, err = io.Copy(file, resp.Body); err != nil {
+	var file *os.File
+	haveFile, err := findErrLog()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if !haveFile {
+		file, err = os.Create(`err_log.txt`)
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else {
+		file, err = os.OpenFile(`err_log.txt`, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+	defer file.Close()
+
+	if err = scraper.Scrape(file); err != nil {
 		log.Fatal(err)
 	}
 }
