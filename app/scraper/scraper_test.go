@@ -98,7 +98,7 @@ func TestAimhDisclosure(t *testing.T) {
 
 func TestScrapeReports(t *testing.T) {
 	testLog := *&log.Logger{}
-	if err := scrapeReports("AAGC", &testLog); err != nil {
+	if err := scrapeReports("AABB", &testLog); err != nil {
 		t.Error(err)
 	}
 }

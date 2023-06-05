@@ -328,57 +328,59 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 		return err
 	}
 
-	// find out how many financial records there are
-	totalReports, err := getTotalReports(url.String())
+	// find out how many pages of records there are
+	// I will iterate across each page (10 records/page)
+	totalPages, err := getTotalPages(url.String())
 	if err != nil {
 		return err
 	}
-	//fmt.Println("TOTAL REPORTS: ", totalReports)
 
 	time.Sleep(1 * time.Second)
 
-	// send request to API endpoint with totalRecords as PageSize
-	url.Reset()
-	if err = urlTemp.Execute(&url, struct {
-		Symbol   string
-		PageNum  string
-		PageSize string
-	}{
-		Symbol:   symbol,
-		PageNum:  "1",
-		PageSize: strconv.Itoa(totalReports),
-	}); err != nil {
-		return err
-	}
-
-	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
-
-	c.OnRequest(func(r *colly.Request) {
-		setHeadersAPI(r)
-	})
-
-	c.OnResponse(func(r *colly.Response) {
-		if err = json.Unmarshal(r.Body, &data); err != nil {
-			logger.Println(err)
-		}
-		fmt.Println("ERROR: ", r.StatusCode)
-	})
-
-	if err = c.Visit(url.String()); err != nil {
-		return err
-	}
-
-	// download each report and put them in server directory
-	// TODO: determine if pdf or html before calling downloadRecord()
-	s1 := rand.NewSource(time.Now().UnixNano())
-	r1 := rand.New(s1)
-
-	for _, r := range data.Records {
-		fmt.Println(r.ID, symbol, r.TypeID)
-		if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
+	// iterate across each page
+	for i := 1; i <= totalPages; i++ {
+		url.Reset()
+		if err = urlTemp.Execute(&url, struct {
+			Symbol   string
+			PageNum  string
+			PageSize string
+		}{
+			Symbol:   symbol,
+			PageNum:  strconv.Itoa(i),
+			PageSize: "10",
+		}); err != nil {
 			return err
 		}
-		time.Sleep(time.Duration(r1.Intn(6)+1) + time.Second)
+
+		c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+		c.OnRequest(func(r *colly.Request) {
+			setHeadersAPI(r)
+			// fmt.Println("sending:", r.URL)
+		})
+
+		c.OnResponse(func(r *colly.Response) {
+			if err = json.Unmarshal(r.Body, &data); err != nil {
+				logger.Println(err)
+			}
+		})
+
+		if err = c.Visit(url.String()); err != nil {
+			logger.Println(err)
+			return err
+		}
+
+		// download each report and put them in server directory
+		s1 := rand.NewSource(time.Now().UnixNano())
+		r1 := rand.New(s1)
+
+		for _, r := range data.Records {
+			fmt.Println(r.ID, symbol, r.TypeID)
+			if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
+				return err
+			}
+			time.Sleep(time.Duration(r1.Intn(6)+1) + time.Second)
+		}
 	}
 
 	return err
@@ -437,9 +439,9 @@ func downloadRecord(id int, symbol, typeID string) error {
 }
 
 // gets the total amount of financial records for a stock
-func getTotalReports(urlAPI string) (int, error) {
+func getTotalPages(urlAPI string) (int, error) {
 	var data TotalFinancialReports
-	var totalRecords int
+	var totalPages int
 	var err error
 
 	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
@@ -450,14 +452,14 @@ func getTotalReports(urlAPI string) (int, error) {
 
 	c.OnResponse(func(r *colly.Response) {
 		err = json.Unmarshal(r.Body, &data)
-		totalRecords = data.TotalRecords
+		totalPages = data.Pages
 	})
 
 	if err = c.Visit(urlAPI); err != nil {
 		return -1, err
 	}
 
-	return totalRecords, err
+	return totalPages, err
 }
 
 func getTotalNews(urlAPI string, logger *log.Logger) (int, error) {
