@@ -284,6 +284,7 @@ const (
 	EXAMPLE_SEC_FILING            = `https://www.otcmarkets.com/filing/html?id=14305340&guid=2UT-kn10eYd-B3h`
 	ALL_FINANCIAL_REPORTS_NOT_SEC = `https://backend.otcmarkets.com/otcapi/company/{{.Symbol}}/financial-report?symbol={{.Symbol}}&page={{.PageNum}}&pageSize={{.PageSize}}&statusId=A&sortOn=releaseDate&sortDir=DESC`
 	FIN_REPORT_URL                = `https://www.otcmarkets.com/otcapi/company/financial-report/{{.ID}}/content`
+	MAX_PAGE_SIZE                 = "50"
 )
 
 func setHeadersAPI(r *colly.Request) {
@@ -309,7 +310,7 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 	// reports will be unmarshaled into data
 	var data TotalFinancialReports
 
-	// forming the url to call the API with
+	// forming the initial url to call the API with to obtain total pages
 	urlTemp := template.New("urlTemp")
 	urlTemp, err := urlTemp.Parse(ALL_FINANCIAL_REPORTS_NOT_SEC)
 	if err != nil {
@@ -323,13 +324,13 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 	}{
 		Symbol:   symbol,
 		PageNum:  "1",
-		PageSize: "10",
+		PageSize: MAX_PAGE_SIZE,
 	}); err != nil {
 		return err
 	}
 
 	// find out how many pages of records there are
-	// I will iterate across each page (10 records/page)
+	// I will iterate across each page (MAX_PAGE_SIZE records/page)
 	totalPages, err := getTotalPages(url.String())
 	if err != nil {
 		return err
@@ -347,7 +348,7 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 		}{
 			Symbol:   symbol,
 			PageNum:  strconv.Itoa(i),
-			PageSize: "10",
+			PageSize: MAX_PAGE_SIZE,
 		}); err != nil {
 			return err
 		}
@@ -356,7 +357,6 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 
 		c.OnRequest(func(r *colly.Request) {
 			setHeadersAPI(r)
-			// fmt.Println("sending:", r.URL)
 		})
 
 		c.OnResponse(func(r *colly.Response) {
@@ -390,6 +390,24 @@ const (
 	SERVER_PATH = `C:\Users\athor\go\otc_ft\app\server`
 )
 
+// builds url used to fetch pdf documents
+func buildResourceURL(id int) (string, error) {
+	var url strings.Builder
+	urlTemp := template.New("urlTemp")
+	urlTemp, err := urlTemp.Parse(FIN_REPORT_URL)
+	if err != nil {
+		return "", err
+	}
+	if err = urlTemp.Execute(&url, struct {
+		ID string
+	}{
+		ID: strconv.Itoa(id),
+	}); err != nil {
+		return "", err
+	}
+	return url.String(), nil
+}
+
 func downloadRecord(id int, symbol, typeID string) error {
 	var err error
 
@@ -400,25 +418,15 @@ func downloadRecord(id int, symbol, typeID string) error {
 	}
 	defer outFile.Close()
 
-	// form the url to send
-	urlTemp := template.New("urlTemp")
-	urlTemp, err = urlTemp.Parse(FIN_REPORT_URL)
+	resourceURL, err := buildResourceURL(id)
 	if err != nil {
-		return err
-	}
-	var url strings.Builder
-	if err = urlTemp.Execute(&url, struct {
-		ID string
-	}{
-		ID: strconv.Itoa(id),
-	}); err != nil {
 		return err
 	}
 
 	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
 
 	c.OnRequest(func(r *colly.Request) {
-		setHeaders(r, BASE_AUTHORITY, url.String()[len(BASE_AUTHORITY):])
+		setHeaders(r, BASE_AUTHORITY, resourceURL[len(BASE_AUTHORITY):])
 		fmt.Println("request:", r.URL)
 	})
 
@@ -431,7 +439,7 @@ func downloadRecord(id int, symbol, typeID string) error {
 		_, err = io.Copy(outFile, bytes.NewReader(respData))
 	})
 
-	if err = c.Visit(url.String()); err != nil {
+	if err = c.Visit(resourceURL); err != nil {
 		return err
 	}
 
@@ -505,7 +513,7 @@ func scrapeNews(symbol string, logger *log.Logger) error {
 	}{
 		Symbol:   symbol,
 		PageNum:  "1",
-		PageSize: "10",
+		PageSize: MAX_PAGE_SIZE,
 	}); err != nil {
 		return err
 	}
