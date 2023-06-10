@@ -15,8 +15,15 @@ import (
 	"github.com/gocolly/colly/v2"
 )
 
+func TestPath(t *testing.T) {
+	url := `https://www.otcmarkets.com/stock/AABB/news/Asia-Broadband-Achieves-46-Million-First-Quarter-Gross-Profit-Validating-Digital-Asset-and-Mining-Operations-Success?id=398022`
+	path := url[len(`https://www.otcmarkets.com`):]
+	fmt.Println(path)
+}
+
 func TestMaxPage(t *testing.T) {
-	pgdata, err := getPageData(0, 100)
+	var logger *log.Logger
+	pgdata, err := getPageData(0, 100, logger)
 	if err != nil {
 		t.Error(err)
 	}

@@ -153,7 +153,7 @@ type PageData struct {
 	} `json:"stocks"`
 }
 
-func getPageData(pageNum, pageSize int) (*PageData, error) {
+func getPageData(pageNum, pageSize int, logger *log.Logger) (*PageData, error) {
 	var pageData PageData
 	var err error = nil
 	urlTemp := template.New("urlTemp")
@@ -176,21 +176,25 @@ func getPageData(pageNum, pageSize int) (*PageData, error) {
 	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
 
 	c.OnError(func(r *colly.Response, err error) {
+		logger.Println(err)
 		fmt.Println("err: status code ->", r.StatusCode, "msg ->", err)
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		setHeaders(r, BASE_AUTHORITY, url.String()[len(`https://www.otcmarkets.com`)-1:])
+		setHeaders(r, BASE_AUTHORITY, url.String()[len(`https://www.otcmarkets.com`):])
 		fmt.Println("request:", r.URL)
 	})
 
 	var jsonData []byte
 	c.OnResponse(func(r *colly.Response) {
 		jsonData, err = jsonConverter(string(r.Body))
-		err = json.Unmarshal(jsonData, &pageData)
+		if err = json.Unmarshal(jsonData, &pageData); err != nil {
+			logger.Println(err)
+		}
 	})
 
 	if err = c.Visit(url.String()); err != nil {
+		logger.Println(err)
 		return nil, err
 	}
 
@@ -208,7 +212,7 @@ const (
 func Scrape(errLog *os.File) error {
 	logger := log.New(errLog, "whenlambo", log.LstdFlags|log.Lshortfile)
 
-	pageData, err := getPageData(0, 100)
+	pageData, err := getPageData(0, 100, logger)
 	if err != nil {
 		return err
 	}
@@ -259,17 +263,20 @@ func Scrape(errLog *os.File) error {
 }
 
 func scrapePage(page int, logger *log.Logger) error {
-	pageData, err := getPageData(page, 100)
+	pageData, err := getPageData(page, 100, logger)
 	if err != nil {
+		logger.Println(err)
 		return err
 	}
 
 	// loop through each stock in the page
 	for _, stock := range pageData.Stocks {
 		if err = scrapeReports(stock.Symbol, logger); err != nil {
+			logger.Println(err)
 			return fmt.Errorf("error scrape report %s: %s", stock.Symbol, err)
 		}
 		if err = scrapeNews(stock.Symbol, logger); err != nil {
+			logger.Println(err)
 			return fmt.Errorf("error scrape news %s: %s", stock.Symbol, err)
 		}
 	}
