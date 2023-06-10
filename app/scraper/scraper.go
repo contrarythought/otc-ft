@@ -331,7 +331,7 @@ func scrapeReports(symbol string, logger *log.Logger) error {
 
 	// find out how many pages of records there are
 	// I will iterate across each page (MAX_PAGE_SIZE records/page)
-	totalPages, err := getTotalPages(url.String())
+	totalPages, err := getTotalRecordPages(url.String())
 	if err != nil {
 		return err
 	}
@@ -447,7 +447,7 @@ func downloadRecord(id int, symbol, typeID string) error {
 }
 
 // gets the total amount of financial records for a stock
-func getTotalPages(urlAPI string) (int, error) {
+func getTotalRecordPages(urlAPI string) (int, error) {
 	var data TotalFinancialReports
 	var totalPages int
 	var err error
@@ -470,9 +470,9 @@ func getTotalPages(urlAPI string) (int, error) {
 	return totalPages, err
 }
 
-func getTotalNews(urlAPI string, logger *log.Logger) (int, error) {
+func getTotalNewsPages(urlAPI string, logger *log.Logger) (int, error) {
 	var data TotalNews
-	var totalNews int
+	var totalPages int
 	var err error
 
 	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
@@ -485,14 +485,14 @@ func getTotalNews(urlAPI string, logger *log.Logger) (int, error) {
 		if err = json.Unmarshal(r.Body, &data); err != nil {
 			logger.Println(err)
 		}
-		totalNews = data.TotalRecords
+		totalPages = data.Pages
 	})
 
 	if err = c.Visit(urlAPI); err != nil {
 		return -1, err
 	}
 
-	return totalNews, err
+	return totalPages, err
 }
 
 func scrapeNews(symbol string, logger *log.Logger) error {
@@ -518,53 +518,57 @@ func scrapeNews(symbol string, logger *log.Logger) error {
 		return err
 	}
 
-	// get total amount of records to scrape
-	totalNews, err := getTotalNews(url.String(), logger)
+	// get total amount of pages to scrape
+	totalPages, err := getTotalNewsPages(url.String(), logger)
 	if err != nil {
 		return err
 	}
 
 	time.Sleep(1 * time.Second)
 
-	// send request to API url with totalRecords
-	// download all news into a txt file (scrape paragraph elements?) with the url to the pr also available
-	url.Reset()
-	if err = urlTemp.Execute(&url, struct {
-		Symbol   string
-		PageNum  string
-		PageSize string
-	}{
-		Symbol:   symbol,
-		PageNum:  "1",
-		PageSize: strconv.Itoa(totalNews),
-	}); err != nil {
-		return err
-	}
-
-	c := colly.NewCollector(colly.UserAgent(getUserAgent()))
-
-	c.OnRequest(func(r *colly.Request) {
-		setHeadersAPI(r)
-	})
-
-	c.OnResponse(func(r *colly.Response) {
-		if err = json.Unmarshal(r.Body, &data); err != nil {
-			logger.Println(err)
-		}
-	})
-
-	if err = c.Visit(url.String()); err != nil {
-		return err
-	}
-
-	s1 := rand.NewSource(time.Now().UnixMilli())
-	r1 := rand.New(s1)
-	// download news records
-	for _, r := range data.Records {
-		if err = downloadNews(symbol, r.Title, strconv.Itoa(r.ID)); err != nil {
+	// grab records of each page
+	for i := 1; i <= totalPages; i++ {
+		url.Reset()
+		if err = urlTemp.Execute(&url, struct {
+			Symbol   string
+			PageNum  string
+			PageSize string
+		}{
+			Symbol:   symbol,
+			PageNum:  strconv.Itoa(i),
+			PageSize: MAX_PAGE_SIZE,
+		}); err != nil {
 			return err
 		}
-		time.Sleep(time.Duration(r1.Intn(4)+1) * time.Second)
+
+		c := colly.NewCollector(colly.UserAgent(getUserAgent()))
+
+		c.OnRequest(func(r *colly.Request) {
+			setHeadersAPI(r)
+		})
+
+		c.OnResponse(func(r *colly.Response) {
+			if err = json.Unmarshal(r.Body, &data); err != nil {
+				logger.Println(err)
+			}
+		})
+
+		if err = c.Visit(url.String()); err != nil {
+			logger.Println(err)
+			return err
+		}
+
+		// download news reports
+		randSource := rand.NewSource(time.Now().UnixNano())
+		randGen := rand.New(randSource)
+
+		for _, r := range data.Records {
+			if err = downloadNews(symbol, r.Title, strconv.Itoa(r.ID)); err != nil {
+				return err
+			}
+
+			time.Sleep(time.Duration(randGen.Intn(4)+1) * time.Second)
+		}
 	}
 
 	return err
