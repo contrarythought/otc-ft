@@ -236,7 +236,7 @@ func Scrape(errLog *os.File, db *sql.DB) error {
 			for {
 				select {
 				case page := <-pageChan:
-					if err := scrapePage(page, logger); err != nil {
+					if err := scrapePage(page, logger, db); err != nil {
 						panic(err)
 					}
 				case <-ctx.Done():
@@ -263,7 +263,7 @@ func Scrape(errLog *os.File, db *sql.DB) error {
 	return nil
 }
 
-func scrapePage(page int, logger *log.Logger) error {
+func scrapePage(page int, logger *log.Logger, db *sql.DB) error {
 	pageData, err := getPageData(page, 100, logger)
 	if err != nil {
 		logger.Println(err)
@@ -272,11 +272,11 @@ func scrapePage(page int, logger *log.Logger) error {
 
 	// loop through each stock in the page
 	for _, stock := range pageData.Stocks {
-		if err = scrapeReports(stock.Symbol, logger); err != nil {
+		if err = scrapeReports(stock.Symbol, logger, db); err != nil {
 			logger.Println(err)
 			return fmt.Errorf("error scrape report %s: %s", stock.Symbol, err)
 		}
-		if err = scrapeNews(stock.Symbol, logger); err != nil {
+		if err = scrapeNews(stock.Symbol, logger, db); err != nil {
 			logger.Println(err)
 			return fmt.Errorf("error scrape news %s: %s", stock.Symbol, err)
 		}
@@ -314,7 +314,7 @@ func setHeadersAPI(r *colly.Request) {
 }
 
 // downloads reports and puts them in server directory
-func scrapeReports(symbol string, logger *log.Logger) error {
+func scrapeReports(symbol string, logger *log.Logger, db *sql.DB) error {
 	// reports will be unmarshaled into data
 	var data TotalFinancialReports
 
@@ -503,7 +503,7 @@ func getTotalNewsPages(urlAPI string, logger *log.Logger) (int, error) {
 	return totalPages, err
 }
 
-func scrapeNews(symbol string, logger *log.Logger) error {
+func scrapeNews(symbol string, logger *log.Logger, db *sql.DB) error {
 	// all news will be unmarshaled into data
 	var data TotalNews
 
