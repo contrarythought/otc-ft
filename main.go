@@ -83,7 +83,7 @@ func main() {
 	}
 	defer file.Close()
 
-	if err = scraper.Scrape(file); err != nil {
+	if err = scraper.Scrape(file, db); err != nil {
 		log.Fatal(err)
 	}
 }

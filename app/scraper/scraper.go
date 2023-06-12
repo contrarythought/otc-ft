@@ -3,6 +3,7 @@ package scraper
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -209,7 +210,7 @@ const (
 // 1. iterate through each page in the screener and grab the JSON data of the page
 // 2. iterate through each stock's details site and download pdf filing and press release info
 
-func Scrape(errLog *os.File) error {
+func Scrape(errLog *os.File, db *sql.DB) error {
 	logger := log.New(errLog, "whenlambo", log.LstdFlags|log.Lshortfile)
 
 	pageData, err := getPageData(0, 100, logger)
