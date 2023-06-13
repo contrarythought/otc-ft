@@ -263,6 +263,7 @@ func Scrape(errLog *os.File, db *sql.DB) error {
 	return nil
 }
 
+// goes down the screener's page and scrapes the reports and PR of each stock
 func scrapePage(page int, logger *log.Logger, db *sql.DB) error {
 	pageData, err := getPageData(page, 100, logger)
 	if err != nil {
@@ -384,6 +385,31 @@ func scrapeReports(symbol string, logger *log.Logger, db *sql.DB) error {
 
 		for _, r := range data.Records {
 			fmt.Println(r.ID, symbol, r.TypeID)
+
+			queryStmt := `INSERT INTO query_info (release_date, company_name, symbol, record_name, record_title,
+						period_date, file_path, url_link) VALUES ($1, $2, $3, $4, $5, $6, $7, $8);`
+
+			filePath := SERVER_PATH + `\` + symbol + strconv.Itoa(r.ID) + r.TypeID + ".pdf"
+			resourceURL, err := buildResourceURL(r.ID)
+			if err != nil {
+				return err
+			}
+
+			res, err := db.Exec(queryStmt, r.ReleaseDate, r.CompanyName, r.Symbol, r.Name, r.Title, r.PeriodDate, filePath,
+				resourceURL)
+			if err != nil {
+				return err
+			}
+			rows, err := res.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if rows <= 0 {
+				err = fmt.Errorf("err: failed to write to query_info")
+				logger.Println(err)
+				return err
+			}
+
 			if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
 				return err
 			}
