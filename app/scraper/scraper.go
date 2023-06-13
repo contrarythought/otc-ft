@@ -410,7 +410,7 @@ func scrapeReports(symbol string, logger *log.Logger, db *sql.DB) error {
 				return err
 			}
 
-			if err = downloadRecord(r.ID, symbol, r.TypeID); err != nil {
+			if err = downloadRecord(r.ID, symbol, r.TypeID, filePath); err != nil {
 				return err
 			}
 			time.Sleep(time.Duration(r1.Intn(6)+1) + time.Second)
@@ -442,11 +442,11 @@ func buildResourceURL(id int) (string, error) {
 	return url.String(), nil
 }
 
-func downloadRecord(id int, symbol, typeID string) error {
+func downloadRecord(id int, symbol, typeID, file_path string) error {
 	var err error
 
 	// file to output the report into
-	outFile, err := os.Create(SERVER_PATH + `\` + symbol + strconv.Itoa(id) + typeID + ".pdf")
+	outFile, err := os.Create(file_path)
 	if err != nil {
 		return err
 	}
